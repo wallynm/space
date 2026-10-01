@@ -1,6 +1,30 @@
-# Space 0.5
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" alt="Logo do Space" width="112" height="112" />
+</p>
 
-Aplicativo local de análise e limpeza de disco para macOS. Tauri 2 + React + TanStack Router/Query + Vite. Sem Next.js, SSR ou servidor Node no aplicativo instalado. As operações no sistema e os processos auxiliares são implementados em Rust.
+# Space
+
+Encontre o que ocupa espaço no seu Mac e escolha o que pode sair. O Space reúne análise de disco, mapa de pastas, arquivos grandes, duplicados, caches de projetos e ferramentas para Docker em um aplicativo local.
+
+## Veja antes de baixar
+
+Capturas da interface com dados de demonstração. Os arquivos e números ilustram os recursos do aplicativo.
+
+**Visão geral — espaço disponível e caches para revisar**
+
+![Visão geral do Space com uso do disco, espaço recuperável e lista de caches](screenshots/space-overview.jpg)
+
+**Explorador — mapa visual do espaço ocupado por pastas**
+
+![Explorador do Space com mapa visual das pastas e seus tamanhos](screenshots/space-map.jpg)
+
+**Monitor flutuante — espaço livre sempre à vista**
+
+<img src="screenshots/space-monitor.png" alt="Monitor flutuante do Space mostrando espaço livre e uso do disco" width="340" />
+
+**[Baixar o Space para macOS](https://github.com/wallynm/space/releases)** · [Todos os recursos](#interface-e-recursos) · [Compilar o aplicativo](#executar-e-empacotar)
+
+Tauri 2 + React + TanStack Router/Query + Vite. Sem Next.js, SSR ou servidor Node no aplicativo instalado. As operações no sistema e os processos auxiliares são implementados em Rust.
 
 Repositório: [wallynm/space](https://github.com/wallynm/space). Projeto na raiz do checkout; instale as dependências e execute os comandos abaixo a partir dela.
 
@@ -99,7 +123,7 @@ Referências: [Updater Tauri](https://v2.tauri.app/plugin/updater/) e [Assinatur
 
 - **CI:** roda em PRs, pushes para `main` e execução manual. Confere versões, testes de frontend/release, build de produção, testes Rust com lockfile e fluxo da interface com IPC simulado. As capturas ficam nos artifacts por 7 dias.
 - **Release:** um push de tag `v<versão>` valida a versão, executa o CI e gera instaladores nativos em `macos-15` (Apple Silicon) e `macos-15-intel`. Cada DMG passa por checksum, assinatura estrita, versão/identificador, arquitetura, ícone e execução dos workers Rust em fixture descartável.
-- **Publicação:** somente após os dois builds aprovados, confere SHA-256, envia os dois DMGs e seus arquivos `.sha256` e publica a GitHub Release. Tags como `v0.6.0-beta.1` geram prereleases. Uma falha no envio deixa o draft para retentar; Releases já publicadas não são sobrescritas.
+- **Publicação:** somente após os dois builds aprovados, confere SHA-256, envia os dois DMGs e seus arquivos `.sha256` e publica a GitHub Release. As notas incluem logo e capturas, com imagens vinculadas à tag daquela versão. Tags como `v0.6.0-beta.1` geram prereleases. Uma falha no envio deixa o draft para retentar; Releases já publicadas não são sobrescritas.
 - **Conferência manual:** execute o workflow `Release` usando `main` para testar todo o empacotamento e obter artifacts sem publicar. Se executar escolhendo uma tag de versão válida, publica a Release daquela tag.
 
 Para lançar uma versão, mantenha `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` e a entrada do pacote em `src-tauri/Cargo.lock` iguais. A interface lê a versão de `package.json`. Depois de commitar e enviar a versão, crie e envie sua tag; para a versão atual:

@@ -88,7 +88,18 @@ export function publishRelease({ directory, plan, repository, execute = run }) {
   if (existing) {
     execute("gh", ["release", "upload", plan.tag, ...files, "--repo", repository, "--clobber"]);
   } else {
-    const notes = `Instaladores para macOS 12 ou superior: Apple Silicon (aarch64) e Intel (x86_64).\n\n` +
+    const imageUrl = (file) => `https://raw.githubusercontent.com/${repository}/${encodeURIComponent(plan.tag)}/${file}`;
+    const notes = `<img src="${imageUrl("src-tauri/icons/128x128@2x.png")}" alt="Logo do Space" width="96" height="96" />\n\n` +
+      `Encontre o que ocupa espaço no seu Mac e escolha o que pode sair.\n\n` +
+      `### Veja antes de baixar\n\nCapturas da interface com dados de demonstração.\n\n` +
+      `**Visão geral — espaço disponível e caches para revisar**\n\n` +
+      `![Visão geral do Space](${imageUrl("screenshots/space-overview.jpg")})\n\n` +
+      `**Explorador — mapa visual do espaço ocupado por pastas**\n\n` +
+      `![Mapa de pastas do Space](${imageUrl("screenshots/space-map.jpg")})\n\n` +
+      `**Monitor flutuante — espaço livre sempre à vista**\n\n` +
+      `<img src="${imageUrl("screenshots/space-monitor.png")}" alt="Monitor flutuante do Space" width="340" />\n\n` +
+      `### Instalação\n\n` +
+      `Instaladores para macOS 12 ou superior: Apple Silicon (aarch64) e Intel (x86_64).\n\n` +
       `Os arquivos .sha256 permitem conferir os downloads.\n\n` +
       `Esta edição usa assinatura ad hoc e não tem notarização Apple; o macOS pode exigir autorização de segurança ao abrir. ` +
       `O canal de atualização dentro do app permanece inativo nesta edição.`;
