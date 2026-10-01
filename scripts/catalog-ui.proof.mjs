@@ -4,6 +4,7 @@ import { chromium, expect } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 const base = process.env.FOLGA_UI_URL || "http://127.0.0.1:1421";
+const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1280, height: 850 }, timezoneId: "America/Sao_Paulo" });
 const page = await context.newPage();
@@ -40,7 +41,7 @@ mockIPC(async (command, args) => {
     case "get_index_status": return { watching: true, refreshing: false, phase: "", checkedAt: now, error: null };
     case "get_monitor": return { settings: { enabled: true, notifications: false, threshold: 15 }, samples: [], growth: [] };
     case "get_protection": return { paths: [] };
-    case "get_updates": return { currentVersion: "0.5.1", configured: false, checkOnLaunch: false, phase: "idle", version: null, notes: null, downloaded: 0, total: null, error: null };
+    case "get_updates": return { currentVersion: ${JSON.stringify(version)}, configured: false, checkOnLaunch: false, phase: "idle", version: null, notes: null, downloaded: 0, total: null, error: null };
     case "trash_files": {
       cleanCount++;
       const removedIds = cleanCount === 1 ? args.ids.filter(id => id === "a") : args.ids;
@@ -104,7 +105,7 @@ try {
     const note = document.createElement("div"); note.textContent = "Conferência da interface • IPC simulado • arquivos de teste";
     Object.assign(note.style, { position: "fixed", bottom: "12px", right: "12px", background: "#153e35", color: "white", padding: "8px 14px", borderRadius: "12px", fontSize: "12px", zIndex: "99999" }); document.body.appendChild(note);
   });
-  const screenshot = fileURLToPath(new URL("../screenshots/space-0.5.1-indice.jpg", import.meta.url));
+  const screenshot = fileURLToPath(new URL(`../screenshots/space-${version}-indice.jpg`, import.meta.url));
   mkdirSync(fileURLToPath(new URL("../screenshots", import.meta.url)), { recursive: true });
   await page.screenshot({ path: screenshot, fullPage: true, type: "jpeg", quality: 85 });
   expect(errors).toEqual([]);

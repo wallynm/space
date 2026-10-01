@@ -122,22 +122,20 @@ Referências: [Updater Tauri](https://v2.tauri.app/plugin/updater/) e [Assinatur
 ## CI e GitHub Releases
 
 - **CI:** roda em PRs, pushes para `main` e execução manual. Confere versões, testes de frontend/release, build de produção, testes Rust com lockfile e fluxo da interface com IPC simulado. As capturas ficam nos artifacts por 7 dias.
+- **Release automática após merge:** quando o CI de um push na `main` passa, o workflow `Automatic release` incrementa a versão patch (por exemplo, `0.5.1` → `0.5.2`), sincroniza os quatro manifestos e envia um commit de versão junto com uma tag anotada. Em seguida, inicia o workflow `Release` nessa tag. Um merge de PR já produz o push necessário; nenhum comando de versão ou tag é obrigatório.
 - **Release:** um push de tag `v<versão>` valida a versão, executa o CI e gera instaladores nativos em `macos-15` (Apple Silicon) e `macos-15-intel`. Cada DMG passa por checksum, assinatura estrita, versão/identificador, arquitetura, ícone e execução dos workers Rust em fixture descartável.
 - **Publicação:** somente após os dois builds aprovados, confere SHA-256, envia os dois DMGs e seus arquivos `.sha256` e publica a GitHub Release. As notas incluem logo e capturas, com imagens vinculadas à tag daquela versão. Tags como `v0.6.0-beta.1` geram prereleases. Uma falha no envio deixa o draft para retentar; Releases já publicadas não são sobrescritas.
 - **Conferência manual:** execute o workflow `Release` usando `main` para testar todo o empacotamento e obter artifacts sem publicar. Se executar escolhendo uma tag de versão válida, publica a Release daquela tag.
 
-Para lançar uma versão, mantenha `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` e a entrada do pacote em `src-tauri/Cargo.lock` iguais. A interface lê a versão de `package.json`. Depois de commitar e enviar a versão, crie e envie sua tag; para a versão atual:
+`package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` e a entrada do pacote em `src-tauri/Cargo.lock` continuam sincronizados; a interface lê a versão de `package.json`. Para escolher uma versão major/minor, aumente esses quatro campos no PR: se a versão for superior às tags estáveis existentes, ela será usada sem incrementar o patch. Prereleases continuam pelo fluxo manual de tags.
 
-```bash
-git tag v0.5.1
-git push origin v0.5.1
-```
+O versionamento usa push atômico sem force: um merge concorrente não é sobrescrito. Se a `main` já avançou quando uma execução antiga do CI termina, essa execução é ignorada e o CI do estado atual passa a determinar a publicação. Retentar `Automatic release` reutiliza a tag preparada, ignora Releases públicas e evita iniciar outra compilação enquanto a mesma tag já está em andamento. Se o empacotamento falhar, retente o workflow `Release` daquela tag.
 
-Nenhum secret extra é necessário para este fluxo: só o job de publicação recebe `contents: write` pelo `GITHUB_TOKEN`. Ações externas usam commits fixados; Node 22, pnpm 10.12.1 e Rust 1.94.1 reproduzem as ferramentas verificadas. Artefatos de versões anteriores e backups locais não entram no checkout do CI nem no upload.
+Nenhum secret extra é necessário: o job de versão recebe `contents: write` e `actions: write`, e o de publicação recebe `contents: write`, pelo `GITHUB_TOKEN`. O commit de versão não dispara outro ciclo de CI; a automação inicia `Release` por `workflow_dispatch`, pois pushes feitos com esse token não iniciam novos workflows. Ações externas usam commits fixados; Node 22, pnpm 10.12.1 e Rust 1.94.1 reproduzem as ferramentas verificadas. Artefatos de versões anteriores e backups locais não entram no checkout do CI nem no upload.
 
 Os pacotes publicados por este workflow têm assinatura ad hoc, **sem notarização Apple**. Publicação no GitHub Releases não configura o updater dentro do app: ele permanece inativo. Distribuição com Developer ID/notarização e updater assinado exige as credenciais e o canal descritos acima; nunca gere uma chave privada no workflow nem a coloque no repositório.
 
-Referências: [runners macOS do GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [pipeline de distribuição Tauri](https://v2.tauri.app/distribute/pipelines/github/) e [GitHub CLI Releases](https://cli.github.com/manual/gh_release_create).
+Referências: [runners macOS do GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [pipeline de distribuição Tauri](https://v2.tauri.app/distribute/pipelines/github/), [GitHub CLI Releases](https://cli.github.com/manual/gh_release_create) e [disparo entre workflows com GITHUB_TOKEN](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
 
 ## Verificar
 

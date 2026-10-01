@@ -31,14 +31,14 @@ export function releasePlan({ productName, versions, ref = "", event = "" }) {
   return { productName, version, tag, publish, prerelease: Boolean(match[4]), prefix: `${productName}_${version}` };
 }
 
-export function projectPlan(env = process.env) {
-  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-  const config = JSON.parse(readFileSync(join(root, "src-tauri/tauri.conf.json"), "utf8"));
-  const cargo = readFileSync(join(root, "src-tauri/Cargo.toml"), "utf8")
+export function projectPlan(env = process.env, directory = root) {
+  const pkg = JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
+  const config = JSON.parse(readFileSync(join(directory, "src-tauri/tauri.conf.json"), "utf8"));
+  const cargo = readFileSync(join(directory, "src-tauri/Cargo.toml"), "utf8")
     .split("[package]")[1]?.split(/^\[/m)[0] ?? "";
   const cargoName = cargo.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
   const cargoVersion = cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-  const lock = readFileSync(join(root, "src-tauri/Cargo.lock"), "utf8")
+  const lock = readFileSync(join(directory, "src-tauri/Cargo.lock"), "utf8")
     .split("[[package]]").find((block) => block.match(/^name = "([^"]+)"/m)?.[1] === cargoName);
   return releasePlan({
     productName: config.productName,
