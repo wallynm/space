@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tests and production UI
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: tests
+      - name: Validate project versions
+        run: node scripts/github-release.mjs prepare
+      - name: Test frontend and release guards
+        run: |
+          pnpm test
+          pnpm test:release
+      - name: Build frontend
+        run: pnpm build
+      - name: Test Rust
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Install test browser
+        run: pnpm exec playwright install chromium
+      - name: Verify production UI with simulated IPC
+        shell: bash
+        run: |
+          pnpm preview > "$RUNNER_TEMP/space-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:1421/ > /dev/null; then
+              pnpm test:ui
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/space-preview.log"
+          exit 1
+      - name: Save UI evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: screenshots/space-*-indice.jpg
+          if-no-files-found: ignore
+          retention-days: 7

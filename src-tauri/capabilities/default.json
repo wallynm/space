@@ -1,0 +1,13 @@
+{
+  "identifier": "local-interface",
+  "description": "Interface local e seletor de pastas. Sem acesso gen\u00e9rico a shell ou filesystem pelo frontend.",
+  "windows": ["main", "floating"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-hide",
+    "dialog:allow-open",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission"
+  ]
+}
