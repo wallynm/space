@@ -1,0 +1,52 @@
+name: Automatic release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Only versioning is serialized; the macOS builds run in the Release workflow.
+concurrency:
+  group: automatic-release-main
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version, tag and start release
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          # This trusted-main job must push the version commit and tag atomically.
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Test release automation
+        run: node --test scripts/*.check.mjs
+      - name: Create synchronized version commit and annotated tag
+        id: version
+        env:
+          SPACE_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/automatic-release.mjs prepare
+      - name: Start release explicitly without a personal access token
+        if: steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPACE_RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: node scripts/automatic-release.mjs dispatch
