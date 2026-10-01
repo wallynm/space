@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { releasePlan, writeChecksum, verifiedAssets, publishRelease } from "./github-release.mjs";
@@ -64,6 +64,14 @@ test("fresh releases stay in draft until all assets have uploaded; retries only 
   assert.ok(create.includes("--draft"));
   assert.ok(create.includes("--verify-tag"));
   assert.equal(create.filter((arg) => arg.endsWith(".dmg") || arg.endsWith(".sha256")).length, 4);
+  const notes = create[create.indexOf("--notes") + 1];
+  const images = [...notes.matchAll(/https:\/\/raw\.githubusercontent\.com\/wallynm\/space\/v0\.5\.1\/([^\s)"<>]+)/g)];
+  assert.equal(images.length, 4, "a logo e as três capturas devem acompanhar a Release");
+  for (const [, file] of images) {
+    assert.ok(readFileSync(new URL(`../${file}`, import.meta.url)).length > 0);
+  }
+  assert.ok(notes.includes("dados de demonstração"));
+  assert.equal(notes.includes("/main/"), false, "imagens antigas não devem mudar com a próxima versão");
   assert.ok(calls.findIndex((args) => args[1] === "edit") > calls.indexOf(create));
   const retry = [];
   publishRelease({ directory, plan, repository: "wallynm/space", execute: (binary, args) => {
