@@ -482,7 +482,7 @@ pub fn reconcile(
             }
             // Directory notifications are shallow. Only new/changed subdirectories are walked.
             for child in entries {
-                if !accepted_path(&root, &child, &policy) {
+                if !accepted_path(&root, &child, &policy) || visited_paths.contains(&child) {
                     continue;
                 }
                 match fs::symlink_metadata(&child) {
@@ -499,6 +499,7 @@ pub fn reconcile(
                         }
                     }
                     Ok(m) if m.is_file() => {
+                        visited_paths.insert(child.clone());
                         report.visited += 1;
                         upsert_file(&mut report, &child, &m);
                     }
@@ -632,6 +633,18 @@ mod tests {
         assert_eq!(updated.scanned_directories, 1);
         assert_eq!(updated.visited, 2);
         assert_eq!(updated.all_files.len(), 3);
+    }
+    #[test]
+    fn overlapping_directory_and_file_events_visit_each_file_once() {
+        let (dir, report) = fixture();
+        let file = dir.path().join("root.bin");
+        fs::write(&file, vec![3u8; 1_048_576]).unwrap();
+        let updated = changed(report, &[dir.path().into(), file.clone(), file.clone()]);
+        assert_eq!(updated.all_files.len(), 3);
+        assert_eq!(updated.bytes, 3_145_728);
+        assert_eq!(updated.reused_directories, 2);
+        assert_eq!(updated.scanned_directories, 1);
+        assert_eq!(updated.visited, 2);
     }
     #[test]
     fn missed_events_are_recovered_by_full_background_reconciliation() {
