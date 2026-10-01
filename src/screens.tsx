@@ -44,6 +44,7 @@ import type { Candidate } from "./types";
 import { MonitorPreferences } from "./tool-screens";
 import { toolsApi } from "./tools-api";
 import spaceIcon from "./assets/space-icon.png";
+import { version as appVersion } from "../package.json";
 const icons: Record<string, LucideIcon> = {
   rust: Code2,
   next: Layers,
@@ -146,7 +147,7 @@ export function Shell() {
             <br />
             Sempre sob seu controle.
           </p>
-          <span className="version">SPACE / 0.5.1</span>
+          <span className="version">SPACE / {appVersion}</span>
         </div>
       </aside>
       <div className="main-pane">
@@ -1021,7 +1022,7 @@ export function Settings() {
       </section>
       <div className="about-line">
         <Mark size={24} />
-        <span>Space 0.5.1</span>
+        <span>Space {appVersion}</span>
         <span>Feito para rodar na sua máquina.</span>
       </div>
     </main>

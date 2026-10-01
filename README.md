@@ -95,6 +95,26 @@ Execute `pnpm release:mac`. O script valida a configuração, compila com a chav
 
 Referências: [Updater Tauri](https://v2.tauri.app/plugin/updater/) e [Assinatura macOS](https://v2.tauri.app/distribute/sign/macos/).
 
+## CI e GitHub Releases
+
+- **CI:** roda em PRs, pushes para `main` e execução manual. Confere versões, testes de frontend/release, build de produção, testes Rust com lockfile e fluxo da interface com IPC simulado. As capturas ficam nos artifacts por 7 dias.
+- **Release:** um push de tag `v<versão>` valida a versão, executa o CI e gera instaladores nativos em `macos-15` (Apple Silicon) e `macos-15-intel`. Cada DMG passa por checksum, assinatura estrita, versão/identificador, arquitetura, ícone e execução dos workers Rust em fixture descartável.
+- **Publicação:** somente após os dois builds aprovados, confere SHA-256, envia os dois DMGs e seus arquivos `.sha256` e publica a GitHub Release. Tags como `v0.6.0-beta.1` geram prereleases. Uma falha no envio deixa o draft para retentar; Releases já publicadas não são sobrescritas.
+- **Conferência manual:** execute o workflow `Release` usando `main` para testar todo o empacotamento e obter artifacts sem publicar. Se executar escolhendo uma tag de versão válida, publica a Release daquela tag.
+
+Para lançar uma versão, mantenha `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` e a entrada do pacote em `src-tauri/Cargo.lock` iguais. A interface lê a versão de `package.json`. Depois de commitar e enviar a versão, crie e envie sua tag; para a versão atual:
+
+```bash
+git tag v0.5.1
+git push origin v0.5.1
+```
+
+Nenhum secret extra é necessário para este fluxo: só o job de publicação recebe `contents: write` pelo `GITHUB_TOKEN`. Ações externas usam commits fixados; Node 22, pnpm 10.12.1 e Rust 1.94.1 reproduzem as ferramentas verificadas. Artefatos de versões anteriores e backups locais não entram no checkout do CI nem no upload.
+
+Os pacotes publicados por este workflow têm assinatura ad hoc, **sem notarização Apple**. Publicação no GitHub Releases não configura o updater dentro do app: ele permanece inativo. Distribuição com Developer ID/notarização e updater assinado exige as credenciais e o canal descritos acima; nunca gere uma chave privada no workflow nem a coloque no repositório.
+
+Referências: [runners macOS do GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [pipeline de distribuição Tauri](https://v2.tauri.app/distribute/pipelines/github/) e [GitHub CLI Releases](https://cli.github.com/manual/gh_release_create).
+
 ## Verificar
 
 - `pnpm build`, `pnpm test` e `pnpm test:release`.

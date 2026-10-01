@@ -14,7 +14,7 @@
     "build:mac": "tauri build --bundles app && node scripts/package-macos.mjs",
     "package:mac": "node scripts/package-macos.mjs",
     "release:mac": "node scripts/release-macos.mjs",
-    "test:release": "node --test scripts/release-config.check.mjs",
+    "test:release": "node --test scripts/*.check.mjs",
     "test:ui": "node scripts/catalog-ui.proof.mjs"
   },
   "dependencies": {
@@ -39,5 +39,6 @@
     "typescript": "^5.9",
     "vite": "^8",
     "vitest": "^4"
-  }
+  },
+  "packageManager": "pnpm@10.12.1"
 }

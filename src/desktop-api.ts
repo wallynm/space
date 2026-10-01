@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { native } from "./bridge";
+import { version as appVersion } from "../package.json";
 import type {
   AppReport,
   CatalogReport,
@@ -19,7 +20,7 @@ const emptyOperation: OperationState = {
 };
 let demoProtection: Protection = { paths: [] };
 const demoUpdate: UpdateView = {
-  currentVersion: "0.5.1",
+  currentVersion: appVersion,
   configured: false,
   checkOnLaunch: true,
   phase: "idle",
