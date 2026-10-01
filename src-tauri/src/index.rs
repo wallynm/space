@@ -401,7 +401,11 @@ mod tests {
                 .unwrap();
         assert_eq!(updated.all_files[0].logical_bytes, 2_097_152);
         assert_ne!(updated.all_files[0].id, before);
-        assert!(updated.visited <= 2);
+        assert!(
+            updated.visited <= 2,
+            "visited={}, full={full}, paths={paths:?}",
+            updated.visited
+        );
     }
     #[test]
     fn delayed_background_scan_cannot_restore_a_removed_record() {
