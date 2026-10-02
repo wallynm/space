@@ -94,6 +94,13 @@ export type MapNode = {
   directory: boolean;
   incomplete: boolean;
 };
+export type FolderReview = {
+  scanId: string;
+  revision: number;
+  path: string;
+  bytes: number;
+  files: number;
+};
 export type Project = {
   path: string;
   name: string;

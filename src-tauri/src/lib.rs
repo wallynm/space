@@ -513,6 +513,67 @@ async fn trash_files(
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+async fn review_folder(
+    app: tauri::AppHandle,
+    scan_id: String,
+    path: String,
+) -> Result<catalog::FolderReview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let _busy = acquire(&state, &app, "Conferindo pasta para revisão")?;
+        let r = state
+            .catalog
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clone()
+            .ok_or("Analise antes de limpar")?;
+        if r.id != scan_id {
+            return Err("Análise substituída".into());
+        }
+        catalog::review_folder(&r, &path, &catalog_policy(&app)?, &state.cancel)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn trash_folder(
+    app: tauri::AppHandle,
+    scan_id: String,
+    path: String,
+    revision: u64,
+) -> Result<CleanupRecord, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let _busy = acquire(&state, &app, "Enviando pasta à Lixeira")?;
+        let mut r = state
+            .catalog
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clone()
+            .ok_or("Analise antes de limpar")?;
+        if r.id != scan_id {
+            return Err("Análise substituída".into());
+        }
+        let record = catalog::trash_folder(
+            &mut r,
+            &path,
+            revision,
+            &catalog_policy(&app)?,
+            &state.cancel,
+        )?;
+        {
+            let mut guard = state.catalog.lock().map_err(|e| e.to_string())?;
+            *guard = Some(r);
+            persist_catalog(&app, guard.as_ref().unwrap());
+        }
+        reconcile_removed(&app, &record.removed);
+        save_record(&app, &record);
+        Ok(record)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
 async fn scan_applications(
     app: tauri::AppHandle,
     include_containers: bool,
@@ -955,6 +1016,8 @@ pub fn run() {
             catalog_children,
             find_duplicates,
             trash_files,
+            review_folder,
+            trash_folder,
             scan_applications,
             trash_applications,
             scan_docker,

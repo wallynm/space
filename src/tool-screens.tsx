@@ -34,7 +34,7 @@ import { useTools, useMonitor } from "./tools-context";
 import { useDisk, useWorkspace } from "./workspace";
 import { bytes, date, shortPath } from "./format";
 import { treemap } from "./treemap";
-import type { FileEntry, MapNode, DockerItem } from "./types";
+import type { FileEntry, MapNode, DockerItem, FolderReview } from "./types";
 function Heading({
   eyebrow,
   title,
@@ -295,8 +295,14 @@ export function Explorer() {
   const [tab, setTab] = useState<"map" | "large" | "duplicates">("map"),
     [trail, setTrail] = useState<string[]>([]),
     [review, setReview] = useState(false);
+  const [folderReview, setFolderReview] = useState<FolderReview | null>(null);
   const r = t.catalog.data;
   const path = trail[0] === r?.root ? trail.at(-1)! : (r?.root ?? "");
+  useEffect(() => { setFolderReview(null); }, [r?.root, tab, path]);
+  const reviewFolder = (folder: string) => {
+    t.trashFolder.reset();
+    t.reviewFolder.mutate(folder, { onSuccess: setFolderReview });
+  };
   const children = useQuery({
     queryKey: ["catalog-children", r?.id, r?.revision, path],
     queryFn: () => toolsApi.children(r!.id, path),
@@ -479,6 +485,13 @@ export function Explorer() {
                   </span>
                 ))}
               </div>
+              <div className="map-folder-actions">
+                <code title={path}>{shortPath(path, disk.data?.home)}</code>
+                <button className="button subtle compact" disabled={w.busy || path === r.root || children.isPending || children.isError}
+                  onClick={() => reviewFolder(path)}>
+                  <Trash2 size={16} /> Enviar esta pasta à Lixeira
+                </button>
+              </div>
               {children.isPending ? (
                 <Empty
                   icon={<LoaderCircle className="spin" />}
@@ -551,6 +564,14 @@ export function Explorer() {
                           </span>
                         </button>
                         <strong>{bytes(n.bytes)}</strong>
+                        {n.directory && (
+                          <button className="icon-button" disabled={w.busy || n.incomplete}
+                            title="Enviar pasta à Lixeira"
+                            aria-label={"Enviar " + n.name + " à Lixeira"}
+                            onClick={() => reviewFolder(n.path)}>
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                         <button
                           className="icon-button"
                           aria-label={"Mostrar " + n.name + " no Finder"}
@@ -687,6 +708,23 @@ export function Explorer() {
               onSuccess: () => setReview(false),
             })
           }
+        />
+      )}
+      {folderReview && (
+        <Review
+          title="Enviar esta pasta à Lixeira?"
+          description={`A pasta inteira e seus ${folderReview.files} arquivos serão movidos à Lixeira. Você pode recuperá-la pelo Histórico ou pelo Finder. O espaço só será liberado após esvaziar a Lixeira.`}
+          items={[folderReview]}
+          acknowledge="Revisei a pasta e seu conteúdo e quero movê-la à Lixeira."
+          pending={t.trashFolder.isPending}
+          error={t.trashFolder.isError ? t.trashFolder.error : null}
+          onClose={() => setFolderReview(null)}
+          onConfirm={() => t.trashFolder.mutate(folderReview, { onSuccess: () => {
+            const activeTrail = trail[0] === r?.root ? trail : [r!.root];
+            const removedIndex = activeTrail.findIndex((p) => p === folderReview.path || p.startsWith(folderReview.path + "/"));
+            if (removedIndex >= 0) setTrail(activeTrail.slice(0, removedIndex));
+            setFolderReview(null);
+          } })}
         />
       )}
     </main>
@@ -963,7 +1001,7 @@ export function Projects() {
                 {p.ecosystem === "Rust"
                   ? "Recompilar builds Rust pode levar vários minutos. Releases entram no diagnóstico, mas a limpeza rápida preserva target/release."
                   : p.ecosystem === "JavaScript"
-                    ? "Builds serão recriados. node_modules aparece no diagnóstico; dependências ficam fora da limpeza rápida."
+                    ? "Builds serão recriados. Para selecionar dependências, use o filtro node_modules na Visão geral."
                     : p.ecosystem === "Godot"
                       ? "Caches de importação podem ser recriados; assets e cenas são dados do projeto."
                       : "Ambientes virtuais são dependências. Reinstalá-los exige os pacotes e possivelmente conexão."}

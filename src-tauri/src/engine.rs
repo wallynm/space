@@ -286,6 +286,13 @@ pub fn build_kind(path: &Path) -> Option<&'static str> {
     }
     None
 }
+fn dependency_kind(path: &Path) -> Option<&'static str> {
+    if path.file_name()? == "node_modules" && path.parent()?.join("package.json").is_file() {
+        Some("node_modules")
+    } else {
+        None
+    }
+}
 fn fixed_caches(home: &Path) -> Vec<(PathBuf, &'static str, &'static str)> {
     vec![
         (home.join(".npm/_cacache"), "npm", "Cache de pacotes npm"),
@@ -311,7 +318,7 @@ fn docker_disk(home: &Path) -> PathBuf {
     home.join("Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw")
 }
 fn protected_kind(path: &Path, home: &Path) -> Option<String> {
-    if let Some(kind) = build_kind(path) {
+    if let Some(kind) = build_kind(path).or_else(|| dependency_kind(path)) {
         return Some(kind.into());
     }
     for (fixed, kind, _) in fixed_caches(home) {
@@ -368,7 +375,7 @@ fn candidate(
     let meta = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
     let (bytes, files, modified) = measure(&path, cancel)?;
     let (device, inode) = identity(&meta);
-    let blocked = if kind == "rust" || kind == "next" {
+    let blocked = if matches!(kind, "rust" | "next" | "node_modules") {
         git_guard(&path).err()
     } else {
         None
@@ -454,9 +461,35 @@ pub fn scan(
                 last_progress = Instant::now();
             }
             let name = entry.file_name().to_string_lossy();
+            if name == "node_modules" {
+                if dependency_kind(entry.path()).is_some()
+                    && seen.insert(entry.path().to_path_buf())
+                {
+                    progress(Progress {
+                        visited,
+                        path: entry.path().to_string_lossy().into(),
+                    });
+                    match candidate(
+                        entry.path().to_path_buf(),
+                        "node_modules",
+                        "Dependências node_modules",
+                        cancel,
+                        paths.len(),
+                    ) {
+                        Ok(c) => paths.push(c),
+                        Err(e) => {
+                            if warnings.len() < 30 {
+                                warnings.push(e);
+                            }
+                        }
+                    }
+                }
+                walker.skip_current_dir();
+                continue;
+            }
             if matches!(
                 name.as_ref(),
-                "node_modules" | ".git" | ".godot" | ".venv" | ".vision-venv" | "dist" | "build"
+                ".git" | ".godot" | ".venv" | ".vision-venv" | "dist" | "build"
             ) {
                 walker.skip_current_dir();
                 continue;
@@ -599,7 +632,7 @@ pub fn validate_cleanup(
     if (bytes, files, modified) != (c.bytes, c.files, c.modified) {
         return Err("Arquivos mudaram desde a análise. Analise novamente.".into());
     }
-    if kind == "rust" || kind == "next" {
+    if matches!(kind.as_str(), "rust" | "next" | "node_modules") {
         git_guard(&path)?;
     }
     if kind == "docker" && docker_confirmation != "APAGAR DOCKER" {
@@ -666,14 +699,22 @@ fn cleanup_at_home(
         let attempt = (|| {
             if check_processes {
                 let (builds, docker, installs) = active_processes()?;
-                if (c.category == "rust" || c.category == "next" || c.category == "xcode") && builds
+                if (c.category == "rust"
+                    || c.category == "next"
+                    || c.category == "xcode"
+                    || c.category == "node_modules")
+                    && builds
                 {
                     return Err(
                         "Processo de desenvolvimento ativo; feche o build e analise novamente"
                             .into(),
                     );
                 }
-                if matches!(c.category.as_str(), "npm" | "python" | "packages") && installs {
+                if matches!(
+                    c.category.as_str(),
+                    "npm" | "python" | "packages" | "node_modules"
+                ) && installs
+                {
                     return Err("Instalação de dependências em andamento; cache preservado".into());
                 }
                 if c.category == "docker" && docker {
@@ -777,6 +818,43 @@ mod tests {
             roots: vec![],
             created_at: now(),
         }
+    }
+    #[test]
+    fn node_modules_requires_project_and_git_safety() {
+        let r = repo();
+        let path = r.path().join("node_modules");
+        fs::create_dir(&path).unwrap();
+        fs::write(path.join("package.js"), "generated").unwrap();
+        assert!(dependency_kind(&path).is_none());
+        fs::write(r.path().join("package.json"), "{}").unwrap();
+        assert_eq!(dependency_kind(&path), Some("node_modules"));
+        let blocked = candidate(
+            path.clone(),
+            "node_modules",
+            "Dependencies",
+            &AtomicBool::new(false),
+            0,
+        )
+        .unwrap();
+        assert!(blocked.blocked.is_some());
+        fs::write(r.path().join(".gitignore"), "node_modules/\n").unwrap();
+        let c = candidate(
+            path,
+            "node_modules",
+            "Dependencies",
+            &AtomicBool::new(false),
+            0,
+        )
+        .unwrap();
+        assert!(c.blocked.is_none());
+        assert!(validate_cleanup(&c, r.path(), &AtomicBool::new(false), "").is_ok());
+        Command::new("/usr/bin/git")
+            .arg("-C")
+            .arg(r.path())
+            .args(["add", "-f", "node_modules/package.js"])
+            .status()
+            .unwrap();
+        assert!(validate_cleanup(&c, r.path(), &AtomicBool::new(false), "").is_err());
     }
     #[test]
     fn source_and_release_never_classified() {

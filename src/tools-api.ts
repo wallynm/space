@@ -15,6 +15,7 @@ import type {
   MonitorSettings,
   CleanupRecord,
   FileEntry,
+  FolderReview,
 } from "./types";
 const GB = 1e9,
   now = () => Date.now() / 1000;
@@ -195,6 +196,10 @@ export const toolsApi = {
     native
       ? invoke<CleanupRecord>("trash_files", { scanId, ids, duplicateMode })
       : refuse(),
+  reviewFolder: (scanId: string, path: string) =>
+    native ? invoke<FolderReview>("review_folder", { scanId, path }) : refuse(),
+  trashFolder: (review: FolderReview) =>
+    native ? invoke<CleanupRecord>("trash_folder", { scanId: review.scanId, path: review.path, revision: review.revision }) : refuse(),
   apps: (includeContainers: boolean) =>
     native
       ? invoke<AppReport>("scan_applications", { includeContainers })

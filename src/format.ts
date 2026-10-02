@@ -24,6 +24,7 @@ export function categoryName(category: string) {
         rust: "Builds Rust",
         next: "Caches Next.js",
         npm: "Pacotes npm",
+        node_modules: "node_modules",
         python: "Python",
         packages: "Homebrew",
         xcode: "Xcode",
