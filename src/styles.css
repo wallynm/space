@@ -877,6 +877,7 @@ nav a:hover {
 }
 .selection-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   padding: 17px 20px;
@@ -2493,3 +2494,14 @@ select:focus-visible {
 .update-preference input {
   accent-color: var(--green);
 }
+
+.select-all-label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.select-all-label input { accent-color: var(--forest); }
+.list-header:has(.select-all-label) { padding-left: 20px; }
+.selection-hint { margin: 12px 20px; font-size: 11px; color: var(--muted); }
+.candidate-row { cursor: pointer; user-select: none; }
+.candidate-row.blocked { cursor: default; }
+.candidate-row:focus-visible { outline: 2px solid var(--forest); outline-offset: -2px; }
+
+.map-folder-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; }
+.map-folder-actions code { overflow-wrap: anywhere; min-width: 0; font-size: 12px; color: var(--muted); }

@@ -527,6 +527,119 @@ pub fn children(report: &CatalogReport, path: &str) -> Result<Vec<Node>, String>
     nodes.sort_by_key(|n| std::cmp::Reverse(n.bytes));
     Ok(nodes)
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderReview {
+    pub scan_id: String,
+    pub revision: u64,
+    pub path: String,
+    pub bytes: u64,
+    pub files: u64,
+}
+
+pub fn review_folder(
+    report: &CatalogReport,
+    path: &str,
+    policy: &Protection,
+    cancel: &AtomicBool,
+) -> Result<FolderReview, String> {
+    let p = Path::new(path);
+    if !p.is_absolute()
+        || p == Path::new(&report.root)
+        || dirs::home_dir().as_deref() == Some(p)
+        || !p.starts_with(&report.root)
+        || p.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir | std::path::Component::CurDir
+            )
+        })
+    {
+        return Err("Escolha uma subpasta do mapa atual".into());
+    }
+    let node = report
+        .nodes
+        .get(path)
+        .filter(|n| n.directory && !n.incomplete)
+        .ok_or("Pasta fora da análise atual ou com leitura parcial")?;
+    policy.check(p)?;
+    crate::engine::no_symlinks(p)?;
+    let mut files = 0;
+    // Validate every entry, including small files absent from the large-file list.
+    for entry in walkdir::WalkDir::new(p).follow_links(false) {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Operação interrompida".into());
+        }
+        let entry = entry.map_err(|e| e.to_string())?;
+        let item = entry.path();
+        policy.check(item)?;
+        if let Some(reason) = protected(item) {
+            return Err(reason);
+        }
+        let meta = fs::symlink_metadata(item).map_err(|e| e.to_string())?;
+        let key = item.to_str().ok_or("Caminho não UTF-8; preservado")?;
+        if meta.is_dir() {
+            let inventory = report
+                .inventory
+                .get(key)
+                .ok_or("Pasta sem leitura completa; analise novamente")?;
+            if DirectoryRevision::read(&meta) != inventory.revision {
+                return Err(format!("Pasta alterada; analise novamente: {key}"));
+            }
+        } else if meta.is_file() {
+            let indexed = report
+                .entries
+                .get(key)
+                .ok_or("Arquivo novo; analise novamente")?;
+            indexed.fingerprint.validate(item)?;
+            files += 1;
+        } else {
+            return Err(format!("Link simbólico ou item especial preservado: {key}"));
+        }
+    }
+    // Recheck directories after traversal, catching additions/removals during validation.
+    for (key, inventory) in &report.inventory {
+        if Path::new(key).starts_with(p) {
+            crate::engine::no_symlinks(Path::new(key))?;
+            let meta = fs::symlink_metadata(key).map_err(|e| e.to_string())?;
+            if DirectoryRevision::read(&meta) != inventory.revision {
+                return Err(format!("Pasta alterada; analise novamente: {key}"));
+            }
+        }
+    }
+    Ok(FolderReview {
+        scan_id: report.id.clone(),
+        revision: report.revision,
+        path: path.into(),
+        bytes: node.bytes,
+        files,
+    })
+}
+
+pub fn trash_folder(
+    report: &mut CatalogReport,
+    path: &str,
+    revision: u64,
+    policy: &Protection,
+    cancel: &AtomicBool,
+) -> Result<CleanupRecord, String> {
+    if revision != report.revision {
+        return Err("O mapa mudou. Revise a pasta novamente.".into());
+    }
+    let review = review_folder(report, path, policy, cancel)?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Operação interrompida".into());
+    }
+    let recovery = trash_path(Path::new(path))?;
+    let mut record = CleanupRecord::new("trash");
+    record.removed.push(path.into());
+    record.recovery.push(recovery);
+    record.removed_bytes = review.bytes;
+    record.moved_bytes = review.bytes;
+    crate::catalog_cache::remove_paths(report, &record.removed, policy);
+    Ok(record)
+}
 fn hash_file(file: &FileEntry, cancel: &AtomicBool) -> Result<String, String> {
     let p = Path::new(&file.path);
     let fingerprint = file
@@ -753,6 +866,95 @@ pub fn trash(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn folder_fixture() -> (tempfile::TempDir, CatalogReport, String) {
+        let d = tempfile::tempdir_in("/private/tmp").unwrap();
+        let folder = d.path().join("folder");
+        fs::create_dir_all(folder.join("nested")).unwrap();
+        fs::write(folder.join("nested/small.txt"), "keep until confirmed").unwrap();
+        fs::write(d.path().join("sibling.txt"), "preserve").unwrap();
+        let report = scan(
+            d.path().to_string_lossy().into(),
+            &AtomicBool::new(false),
+            |_| {},
+        )
+        .unwrap();
+        (d, report, folder.to_string_lossy().into())
+    }
+    #[test]
+    fn folder_review_covers_small_files_and_rejects_outside_root_and_protection() {
+        let (d, r, path) = folder_fixture();
+        let review =
+            review_folder(&r, &path, &Protection::default(), &AtomicBool::new(false)).unwrap();
+        assert_eq!(review.files, 1);
+        assert_eq!(review.bytes, r.nodes[&path].bytes);
+        for bad in [&r.root, "/etc", &format!("{path}/../folder")] {
+            assert!(
+                review_folder(&r, bad, &Protection::default(), &AtomicBool::new(false)).is_err()
+            );
+        }
+        let protected = Protection {
+            paths: vec![format!("{path}/nested")],
+        };
+        assert!(review_folder(&r, &path, &protected, &AtomicBool::new(false)).is_err());
+        assert!(d.path().join("sibling.txt").exists());
+    }
+    #[test]
+    fn folder_review_rejects_changed_content_symlinks_and_partial_inventory() {
+        let (_d, mut r, path) = folder_fixture();
+        fs::write(format!("{path}/nested/small.txt"), "changed").unwrap();
+        assert!(review_folder(&r, &path, &Protection::default(), &AtomicBool::new(false)).is_err());
+        r = scan(r.root, &AtomicBool::new(false), |_| {}).unwrap();
+        std::os::unix::fs::symlink("/etc", format!("{path}/link")).unwrap();
+        r = scan(r.root, &AtomicBool::new(false), |_| {}).unwrap();
+        assert!(review_folder(&r, &path, &Protection::default(), &AtomicBool::new(false)).is_err());
+        fs::remove_file(format!("{path}/link")).unwrap();
+        r = scan(r.root, &AtomicBool::new(false), |_| {}).unwrap();
+        r.inventory.remove(&format!("{path}/nested"));
+        assert!(review_folder(&r, &path, &Protection::default(), &AtomicBool::new(false)).is_err());
+    }
+    #[test]
+    fn folder_trash_rejects_stale_review_and_cancellation() {
+        let (_d, mut r, path) = folder_fixture();
+        let revision = r.revision;
+        assert!(trash_folder(
+            &mut r,
+            &path,
+            revision + 1,
+            &Protection::default(),
+            &AtomicBool::new(false)
+        )
+        .is_err());
+        assert!(trash_folder(
+            &mut r,
+            &path,
+            revision,
+            &Protection::default(),
+            &AtomicBool::new(true)
+        )
+        .is_err());
+        assert!(Path::new(&path).exists());
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn folder_trash_moves_only_selected_subtree_and_can_restore_it() {
+        let (d, mut r, path) = folder_fixture();
+        let revision = r.revision;
+        let mut record = trash_folder(
+            &mut r,
+            &path,
+            revision,
+            &Protection::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert_eq!(record.removed, vec![path.clone()]);
+        assert_eq!(record.freed_bytes, 0);
+        assert!(!Path::new(&path).exists());
+        assert!(d.path().join("sibling.txt").exists());
+        assert!(!r.nodes.keys().any(|key| Path::new(key).starts_with(&path)));
+        crate::native::restore(&mut record.recovery[0]).unwrap();
+        assert!(Path::new(&format!("{path}/nested/small.txt")).exists());
+    }
     use tempfile::tempdir_in;
     fn fixture() -> (tempfile::TempDir, CatalogReport) {
         let d = tempdir_in("/private/tmp").unwrap();

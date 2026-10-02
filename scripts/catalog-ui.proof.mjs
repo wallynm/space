@@ -22,6 +22,7 @@ let catalog = JSON.parse(localStorage.getItem("folga.test.catalog") || "null") |
 catalog.cached = true;
 const calls = [];
 let cleanCount = 0;
+let folders = ["folder-one", "folder-two"];
 const persist = () => localStorage.setItem("folga.test.catalog", JSON.stringify(catalog));
 const publish = async () => { persist(); await emit("catalog-changed", structuredClone(catalog)); };
 window.__fixture = { calls, async change(oldId, newId) {
@@ -34,10 +35,27 @@ mockIPC(async (command, args) => {
     case "get_operation": return { id: "", running: false, label: "", startedAt: 0, revision: 0, progress: { visited: 0, path: "" } };
     case "get_disk_info": return { total: 500e9, free: 100e9, used: 400e9, home: "/fixture", volume: "Fixture de teste" };
     case "get_default_roots": return ["/fixture"];
-    case "get_last_scan": case "get_applications": case "get_docker": case "get_duplicates": return null;
+    case "get_last_scan": return { id: "selection-test", createdAt: now, scannedDirs: 4, elapsedMs: 1, roots: ["/fixture"], warnings: [], candidates: [
+      { id: "npm-a", path: "/fixture/npm-a", label: "Cache npm A", category: "npm", bytes: 64e6, files: 1, risk: "cache", blocked: null },
+      { id: "protected", path: "/fixture/protected", label: "Protegido", category: "npm", bytes: 64e6, files: 1, risk: "cache", blocked: "Pasta protegida" },
+      { id: "npm-b", path: "/fixture/npm-b", label: "Cache npm B", category: "npm", bytes: 64e6, files: 1, risk: "cache", blocked: null },
+      { id: "dependencies", path: "/fixture/project/node_modules", label: "Dependências node_modules", category: "node_modules", bytes: 64e6, files: 1, risk: "cache", blocked: null }
+    ] };
+    case "reveal_path": return null;
+    case "get_applications": case "get_docker": case "get_duplicates": return null;
     case "get_history": return [];
     case "get_catalog": return structuredClone(catalog);
-    case "catalog_children": return catalog.files.map(f => ({ path: f.path, name: f.name, bytes: f.bytes, directory: false, incomplete: false }));
+    case "catalog_children": {
+      if (args.path !== catalog.root) return [{ path: args.path + "/nested", name: "nested", bytes: 128e6, directory: true, incomplete: false }];
+      return [...folders.map(name => ({ path: catalog.root + "/" + name, name, bytes: 128e6, directory: true, incomplete: false })), ...catalog.files.map(f => ({ path: f.path, name: f.name, bytes: f.bytes, directory: false, incomplete: false }))];
+    }
+    case "review_folder": return { scanId: catalog.id, revision: catalog.revision, path: args.path, bytes: 128e6, files: 2 };
+    case "trash_folder": {
+      if (args.revision !== catalog.revision) throw new Error("O mapa mudou. Revise a pasta novamente.");
+      folders = folders.filter(name => catalog.root + "/" + name !== args.path);
+      catalog.revision++; await publish();
+      return { id: "folder-cleanup", createdAt: now, mode: "trash", removed: [args.path], skipped: [], recovery: [], movedBytes: 128e6, removedBytes: 128e6, freedBytes: 0 };
+    }
     case "get_index_status": return { watching: true, refreshing: false, phase: "", checkedAt: now, error: null };
     case "get_monitor": return { settings: { enabled: true, notifications: false, threshold: 15 }, samples: [], growth: [] };
     case "get_protection": return { paths: [] };
@@ -75,7 +93,90 @@ const clean = async () => {
   await page.getByRole("button", { name: "Confirmar seleção", exact: true }).click();
 };
 try {
-  await page.goto(base + "/#/explore");
+  await page.goto(base + "/#/");
+  const candidate = (path) => page.getByRole("checkbox", { name: "Selecionar /fixture/" + path, exact: true });
+  await page.getByText("Cache npm A", { exact: true }).click();
+  await expect(candidate("npm-a")).toBeChecked();
+  await candidate("npm-b").click({ modifiers: ["Shift"] });
+  await expect(candidate("npm-b")).toBeChecked();
+  await expect(candidate("protected")).not.toBeChecked();
+  await expect(candidate("protected")).toBeDisabled();
+  await candidate("npm-b").click({ modifiers: ["Shift"] });
+  await expect(candidate("npm-a")).not.toBeChecked();
+  await expect(candidate("npm-b")).not.toBeChecked();
+  await page.getByRole("button", { name: "Pacotes npm", exact: true }).click();
+  await page.getByRole("button", { name: "Selecionar todos", exact: true }).click();
+  await expect(candidate("npm-a")).toBeChecked();
+  await expect(candidate("npm-b")).toBeChecked();
+  await page.getByRole("checkbox", { name: "Selecionar todos os itens visíveis", exact: true }).uncheck();
+  await expect(candidate("npm-a")).not.toBeChecked();
+  await expect(candidate("npm-b")).not.toBeChecked();
+  await page.getByRole("button", { name: "node_modules", exact: true }).click();
+  await expect(candidate("project/node_modules")).not.toBeChecked();
+  await page.getByText("Dependências node_modules", { exact: true }).click();
+  await expect(candidate("project/node_modules")).toBeChecked();
+  await page.getByRole("button", { name: "Limpar seleção", exact: true }).click();
+  await candidate("project/node_modules").focus();
+  await page.keyboard.press("Control+a");
+  await expect(candidate("project/node_modules")).toBeChecked();
+  await page.getByRole("button", { name: "Todos", exact: true }).click();
+  await expect(candidate("npm-a")).not.toBeChecked();
+  await page.getByRole("button", { name: "Limpar seleção", exact: true }).click();
+  await page.getByRole("textbox", { name: "Buscar pastas", exact: true }).fill("npm-a");
+  await page.getByRole("button", { name: "Selecionar todos", exact: true }).click();
+  await expect(candidate("npm-a")).toBeChecked();
+  await page.getByRole("textbox", { name: "Buscar pastas", exact: true }).fill("");
+  await expect(candidate("npm-b")).not.toBeChecked();
+  await candidate("npm-a").locator("..").getByRole("button", { name: "Mostrar /fixture/npm-a no Finder" }).click();
+  await expect(candidate("npm-a")).toBeChecked();
+  await page.getByRole("button", { name: "Limpar seleção", exact: true }).click();
+  await candidate("npm-a").locator("..").focus();
+  await page.keyboard.press("Space");
+  await expect(candidate("npm-a")).toBeChecked();
+  await page.keyboard.press("Meta+a");
+  await expect(candidate("npm-b")).toBeChecked();
+  await page.getByRole("checkbox", { name: "Selecionar todos os itens visíveis", exact: true }).uncheck();
+  await candidate("npm-a").check();
+  await expect(page.getByRole("checkbox", { name: "Selecionar todos os itens visíveis", exact: true })).toHaveJSProperty("indeterminate", true);
+  const search = page.getByRole("textbox", { name: "Buscar pastas", exact: true });
+  await search.fill("npm");
+  await search.press("Control+a");
+  await expect(candidate("npm-b")).not.toBeChecked();
+  await search.fill("");
+  await page.setViewportSize({ width: 840, height: 650 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(840);
+  await page.setViewportSize({ width: 1280, height: 850 });
+  mkdirSync(fileURLToPath(new URL("../screenshots", import.meta.url)), { recursive: true });
+  await page.screenshot({ path: fileURLToPath(new URL("../screenshots/space-selection.jpg", import.meta.url)), fullPage: true, type: "jpeg", quality: 85 });
+  await page.getByRole("link", { name: "Explorador", exact: true }).click();
+  const currentFolderAction = page.getByRole("button", { name: "Enviar esta pasta à Lixeira", exact: true });
+  await expect(currentFolderAction).toBeDisabled();
+  await page.getByRole("button", { name: "Enviar folder-one à Lixeira", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("/fixture/folder-one");
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Confirmar seleção" })).toBeDisabled();
+  await page.getByRole("dialog").getByRole("button", { name: "Voltar", exact: true }).click();
+  expect(await page.evaluate(() => window.__fixture.calls.filter(c => c.command === "trash_folder").length)).toBe(0);
+  await page.locator(".tool-list .row-link").filter({ hasText: "folder-one" }).click();
+  await expect(currentFolderAction).toBeEnabled();
+  await page.locator(".tool-list .row-link").filter({ hasText: "nested" }).click();
+  await page.setViewportSize({ width: 840, height: 650 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(840);
+  await page.setViewportSize({ width: 1280, height: 850 });
+  await page.screenshot({ path: fileURLToPath(new URL("../screenshots/space-folder-actions.jpg", import.meta.url)), fullPage: true, type: "jpeg", quality: 85 });
+  await currentFolderAction.click();
+  await expect(page.getByRole("dialog")).toContainText("/fixture/folder-one/nested");
+  await page.getByRole("dialog").getByRole("button", { name: "Voltar", exact: true }).click();
+  await page.getByRole("button", { name: "Voltar à pasta anterior" }).click();
+  await currentFolderAction.click();
+  await page.getByRole("checkbox", { name: "Revisei a pasta e seu conteúdo e quero movê-la à Lixeira.", exact: true }).check();
+  await page.getByRole("dialog").getByRole("button", { name: "Confirmar seleção" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Enviar folder-one à Lixeira", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Enviar folder-two à Lixeira", exact: true })).toBeEnabled();
+  await expect(currentFolderAction).toBeDisabled();
+  const folderRemovals = await page.evaluate(() => window.__fixture.calls.filter(c => c.command === "trash_folder"));
+  expect(folderRemovals).toHaveLength(1);
+  expect(folderRemovals[0].args.path).toBe("/fixture/folder-one");
   await page.getByRole("tab", { name: "Grandes e antigos", exact: true }).click();
   await expect(box("a")).toBeEnabled(); // A persisted catalog can be used before background audit finishes.
   await box("a").check(); await box("b").check();
@@ -109,5 +210,5 @@ try {
   mkdirSync(fileURLToPath(new URL("../screenshots", import.meta.url)), { recursive: true });
   await page.screenshot({ path: screenshot, fullPage: true, type: "jpeg", quality: 85 });
   expect(errors).toEqual([]);
-  console.log(JSON.stringify({ tests: ["persisted-catalog-selectable", "partial-cleanup-preserves-selection", "second-cleanup-only-remaining-selection", "reload-does-not-resurrect-records", "changed-identity-drops-selection", "unrelated-change-keeps-selection", "no-full-scan-required", "minimum-width-840", "no-console-errors"], screenshot, cleaningIds, errors }));
+  console.log(JSON.stringify({ tests: ["folder-review-from-row", "folder-review-at-deep-map-level", "cancel-does-not-remove-folder", "folder-cleanup-returns-to-parent-and-keeps-siblings", "row-click-selection", "shift-range-select-and-clear", "blocked-items-preserved", "select-all-filter-and-search", "keyboard-select-all", "node-modules-filter", "finder-does-not-toggle", "persisted-catalog-selectable", "partial-cleanup-preserves-selection", "second-cleanup-only-remaining-selection", "reload-does-not-resurrect-records", "changed-identity-drops-selection", "unrelated-change-keeps-selection", "no-full-scan-required", "minimum-width-840", "no-console-errors"], screenshot, cleaningIds, errors }));
 } finally { await browser.close(); }

@@ -7,7 +7,7 @@ import { native } from "./bridge";
 import { useWorkspace } from "./workspace";
 import { desktopApi } from "./desktop-api";
 import { newerCatalog, retainSelection, retainDuplicateSelection } from "./catalog-state";
-import type { CatalogReport } from "./types";
+import type { CatalogReport, FolderReview } from "./types";
 export function useMonitor() {
   return useQuery({
     queryKey: ["monitor"],
@@ -106,6 +106,25 @@ function useToolsValue() {
       done();
     },
   });
+  const reviewFolder = useMutation({
+    mutationFn: (path: string) => toolsApi.reviewFolder(catalog.data!.id, path),
+    onMutate: () => w.setNotice(""),
+    onError: fail,
+  });
+  const trashFolder = useMutation({
+    mutationFn: (review: FolderReview) => toolsApi.trashFolder(review),
+    onMutate: () => w.setNotice(""),
+    onError: fail,
+    onSuccess: async (r) => {
+      await client.cancelQueries({ queryKey: ["catalog"] });
+      const incoming = await toolsApi.catalog();
+      client.setQueryData<CatalogReport | null>(["catalog"], (old) => newerCatalog(old, incoming));
+      void client.invalidateQueries({ queryKey: ["duplicates"] });
+      void client.invalidateQueries({ queryKey: ["catalog-children"] });
+      w.setNotice("Pasta enviada à Lixeira. Abra o Histórico para conferir e recuperar.");
+      done();
+    },
+  });
   const scanApps = useMutation({
     mutationFn: toolsApi.apps,
     onMutate: () => {
@@ -171,6 +190,8 @@ function useToolsValue() {
     find,
     duplicates,
     trash,
+    reviewFolder,
+    trashFolder,
     fileSelection,
     setFileSelection,
     duplicateSelection,

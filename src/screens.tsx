@@ -1,3 +1,4 @@
+import { toggleRange, selectVisible } from "./selection";
 import { ProtectedFolders, Updates } from "./settings-tools";
 import { desktopApi } from "./desktop-api";
 import { useEffect, useRef, useState } from "react";
@@ -49,6 +50,7 @@ const icons: Record<string, LucideIcon> = {
   rust: Code2,
   next: Layers,
   npm: Package,
+  node_modules: Package,
   python: Box,
   packages: Package,
   xcode: Code2,
@@ -327,7 +329,9 @@ export function Dashboard() {
   const [review, setReview] = useState(false);
   const report = w.report.data;
   const all = report?.candidates ?? [];
-  const categories = [...new Set(all.map((c) => c.category))];
+  const categories = [...new Set([...all.map((c) => c.category), "node_modules"])];
+  const anchor = useRef<string | null>(null);
+  const selectAllBox = useRef<HTMLInputElement>(null);
   const visible = all.filter(
     (c) =>
       (w.filter === "all" || c.category === w.filter) &&
@@ -336,14 +340,24 @@ export function Dashboard() {
   );
   const selected = all.filter((c) => w.selected.has(c.id) && !c.blocked);
   const total = selectedBytes(all, w.selected);
-  const toggle = (c: Candidate) => {
+  const selectable = visible.filter((c) => !c.blocked);
+  const allVisibleSelected = selectable.length > 0 && selectable.every((c) => w.selected.has(c.id));
+  useEffect(() => {
+    anchor.current = null;
+  }, [w.filter, search, report?.id]);
+  useEffect(() => {
+    if (selectAllBox.current) {
+      selectAllBox.current.indeterminate = !allVisibleSelected && selectable.some((c) => w.selected.has(c.id));
+    }
+  }, [allVisibleSelected, selectable, w.selected]);
+  const toggle = (c: Candidate, shift = false) => {
     if (w.busy || c.blocked) return;
-    w.setSelected((old) => {
-      const next = new Set(old);
-      if (next.has(c.id)) next.delete(c.id);
-      else next.add(c.id);
-      return next;
-    });
+    const from = anchor.current;
+    w.setSelected((old) => toggleRange(old, visible, c.id, shift ? from : null));
+    if (!shift || !visible.some((item) => item.id === from)) anchor.current = c.id;
+  };
+  const selectAll = () => {
+    if (!w.busy) w.setSelected((old) => selectVisible(old, visible));
   };
 
   return (
@@ -422,7 +436,14 @@ export function Dashboard() {
           </Link>
         </div>
       )}
-      <section className="files-section">
+      <section className="files-section" onKeyDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (review || target.closest('textarea, [contenteditable="true"], input:not([type="checkbox"])')) return;
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+          e.preventDefault();
+          selectAll();
+        }
+      }}>
         <div className="section-heading">
           <div>
             <h2>
@@ -474,7 +495,12 @@ export function Dashboard() {
               </label>
             </div>
             <div className="list-header">
-              <span>PASTA / ORIGEM</span>
+              <label className="select-all-label">
+                <input ref={selectAllBox} type="checkbox" aria-label="Selecionar todos os itens visíveis"
+                  checked={allVisibleSelected} disabled={w.busy || !selectable.length}
+                  onChange={() => w.setSelected((old) => selectVisible(old, visible, !allVisibleSelected))} />
+                PASTA / ORIGEM
+              </label>
               <span>TIPO</span>
               <span>TAMANHO</span>
             </div>
@@ -485,6 +511,17 @@ export function Dashboard() {
                   return (
                     <div
                       key={c.id}
+                      tabIndex={c.blocked || w.busy ? -1 : 0}
+                      aria-label={c.label}
+                      onClick={(e) => {
+                        if (!(e.target as HTMLElement).closest("button, input")) toggle(c, e.shiftKey);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === " " || e.key === "Enter")) {
+                          e.preventDefault();
+                          toggle(c, e.shiftKey);
+                        }
+                      }}
                       className={
                         "candidate-row " +
                         (c.blocked ? "blocked " : "") +
@@ -496,7 +533,8 @@ export function Dashboard() {
                         type="checkbox"
                         checked={w.selected.has(c.id)}
                         disabled={!!c.blocked || w.busy}
-                        onChange={() => toggle(c)}
+                        onChange={() => {}}
+                        onClick={(e) => { e.stopPropagation(); toggle(c, e.shiftKey); }}
                       />
                       <div className={"category-icon category-" + c.category}>
                         <Icon size={20} />
@@ -546,19 +584,16 @@ export function Dashboard() {
                 </div>
               )}
             </div>
+            {w.filter === "node_modules" && <p className="selection-hint">Dependências dos projetos. Após remover, será preciso instalá-las novamente.</p>}
+            <p className="selection-hint">Shift + clique seleciona um intervalo · ⌘A / Ctrl+A seleciona os itens visíveis</p>
             <div className="selection-bar">
+              <button className="text-button" disabled={w.busy || !selectable.length} onClick={selectAll}>
+                <Check size={15} /> Selecionar todos
+              </button>
               <button
                 className="text-button"
                 disabled={w.busy}
-                onClick={() =>
-                  w.setSelected(
-                    new Set(
-                      all
-                        .filter((c) => !c.blocked && c.risk === "cache")
-                        .map((c) => c.id),
-                    ),
-                  )
-                }
+                onClick={() => w.setSelected((old) => selectVisible(old, visible.filter((c) => c.risk === "cache" && c.category !== "node_modules")))}
               >
                 <Check size={15} />
                 Selecionar caches
@@ -685,6 +720,7 @@ function ReviewDialog({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
+      {items.some((c) => c.category === "node_modules") && <p>As pastas node_modules selecionadas serão removidas. Reinstale as dependências antes de executar esses projetos novamente.</p>}
       {docker && (
         <div className="docker-warning">
           <strong>
