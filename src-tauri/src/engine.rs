@@ -494,7 +494,12 @@ pub fn scan(
                 walker.skip_current_dir();
                 continue;
             }
-            if name == "target" && entry.path().parent().unwrap().join("Cargo.toml").is_file() {
+            if name == "target"
+                && entry
+                    .path()
+                    .parent()
+                    .is_some_and(|p| p.join("Cargo.toml").is_file())
+            {
                 let target = entry.path();
                 let mut builds = vec![target.join("debug")];
                 if let Ok(children) = fs::read_dir(target) {

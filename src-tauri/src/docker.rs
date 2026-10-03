@@ -90,11 +90,15 @@ fn human_size(v: &str) -> Option<u64> {
     let split = v.find(|c: char| c.is_ascii_alphabetic())?;
     let n = v[..split].trim().parse::<f64>().ok()?;
     let multiplier = match v[split..].trim() {
-        "B" => 1.,
-        "kB" | "KB" => 1e3,
-        "MB" => 1e6,
-        "GB" => 1e9,
-        "TB" => 1e12,
+        "B" | "b" => 1.,
+        "kB" | "KB" | "kb" => 1e3,
+        "MB" | "mb" => 1e6,
+        "GB" | "gb" => 1e9,
+        "TB" | "tb" => 1e12,
+        "KiB" | "kib" | "KIB" => 1024.,
+        "MiB" | "mib" | "MIB" => 1024. * 1024.,
+        "GiB" | "gib" | "GIB" => 1024. * 1024. * 1024.,
+        "TiB" | "tib" | "TIB" => 1024. * 1024. * 1024. * 1024.,
         _ => return None,
     };
     Some((n * multiplier) as u64)
@@ -478,6 +482,19 @@ mod tests {
         assert!(local("ssh://host").is_err());
         assert!(local("tcp://host:2375").is_err());
         assert!(local("unix:///tmp/sock").is_ok())
+    }
+    #[test]
+    fn parses_decimal_and_binary_human_sizes() {
+        assert_eq!(human_size("500B"), Some(500));
+        assert_eq!(human_size("10kB"), Some(10_000));
+        assert_eq!(human_size("500MB"), Some(500_000_000));
+        assert_eq!(human_size("1.5GB"), Some(1_500_000_000));
+        assert_eq!(human_size("2TB"), Some(2_000_000_000_000));
+        assert_eq!(human_size("10KiB"), Some(10 * 1024));
+        assert_eq!(human_size("12.5MiB"), Some((12.5 * 1024. * 1024.) as u64));
+        assert_eq!(human_size("1.5GiB"), Some((1.5 * 1024. * 1024. * 1024.) as u64));
+        assert_eq!(human_size("1TiB"), Some(1024 * 1024 * 1024 * 1024));
+        assert_eq!(human_size("invalid"), None);
     }
     #[test]
     fn removals_target_only_selected_resource() {
