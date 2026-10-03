@@ -1249,13 +1249,13 @@
   overflow-y: auto;
 }
 .sidebar nav {
-  gap: 5px;
+  gap: 4px;
 }
 .sidebar nav a {
-  min-height: 43px;
+  min-height: 38px;
 }
 .sidebar-bottom {
-  padding-top: 28px;
+  padding-top: 16px;
 }
 .tool-content {
   padding-bottom: 34px;

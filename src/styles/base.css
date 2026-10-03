@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   font-family: "IBM Plex Sans", sans-serif;
   color: #22362f;
   background: #f5f5ee;
@@ -13,6 +14,22 @@
 }
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd3c5 transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd3c5;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9fae97;
 }
 body {
   margin: 0;

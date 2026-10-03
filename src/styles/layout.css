@@ -8,7 +8,7 @@
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  padding: 45px 24px 25px;
+  padding: 30px 22px 20px;
   background: #f0f2e8;
   position: fixed;
   top: 0;
@@ -32,7 +32,7 @@
   font-family: "IBM Plex Mono", monospace;
   font-size: 8px;
   letter-spacing: 1.1px;
-  margin: 13px 0 39px;
+  margin: 10px 0 24px;
   color: #728069;
   white-space: nowrap;
 }
@@ -48,7 +48,7 @@ nav a {
   gap: 12px;
   font-size: 13px;
   font-weight: 500;
-  padding: 13px 13px;
+  padding: 9px 12px;
   border-radius: 9px;
   color: #718076;
 }
@@ -76,10 +76,10 @@ nav a:hover {
 .sidebar-bottom p {
   font-size: 11px;
   color: #839078;
-  line-height: 1.7;
-  padding-top: 14px;
+  line-height: 1.6;
+  padding-top: 10px;
   border-top: 1px solid #dce2d3;
-  margin-top: 20px;
+  margin-top: 12px;
 }
 .version {
   font-family: "IBM Plex Mono", monospace;
