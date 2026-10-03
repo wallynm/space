@@ -157,10 +157,9 @@ pub fn scan_with_policy(
             .into_iter()
             .filter_entry(|e| {
                 e.depth() == 0
-                    || !e
-                        .path()
+                    || e.path()
                         .parent()
-                        .is_some_and(|p| p.extension().is_some_and(|e| e == "app"))
+                        .is_none_or(|p| p.extension().is_none_or(|e| e != "app"))
             })
         {
             if cancel.load(Ordering::Relaxed) {

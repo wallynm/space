@@ -100,6 +100,9 @@ pub fn run_with_lines(
             let line = line?;
             on_line(&line);
             if b.len() < 1800 {
+                if !b.is_empty() {
+                    b.push(b'\n');
+                }
                 b.extend(line.bytes().take(1800 - b.len()));
             }
         }
@@ -272,6 +275,17 @@ mod tests {
         assert_eq!(fs::read_to_string(to).unwrap(), "recover me");
         assert!(r.restored);
         assert!(restore(&mut r).is_err());
+    }
+    #[test]
+    fn run_with_lines_separates_stderr_lines_with_newline() {
+        let cancel = AtomicBool::new(false);
+        let binary = Path::new("/bin/sh");
+        let args = vec![
+            "-c".to_string(),
+            "printf 'error line 1\nerror line 2\n' >&2; exit 1".to_string(),
+        ];
+        let err = run_with_lines(binary, &args, &cancel, 5, |_| {}).unwrap_err();
+        assert!(err.contains("error line 1\nerror line 2"), "got: {:?}", err);
     }
 }
 
