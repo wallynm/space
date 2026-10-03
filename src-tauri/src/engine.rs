@@ -145,7 +145,7 @@ pub fn disk_info() -> Result<DiskInfo, String> {
             return Err(std::io::Error::last_os_error().to_string());
         }
         let stat = unsafe { stat.assume_init() };
-        let block = stat.f_frsize as u64;
+        let block = stat.f_frsize;
         let total = (stat.f_blocks as u64) * block;
         let free = (stat.f_bavail as u64) * block;
         let used = total.saturating_sub((stat.f_bfree as u64) * block);

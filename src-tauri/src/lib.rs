@@ -759,7 +759,7 @@ async fn restore_trash(
             .find(|r| r.id == item_id)
             .ok_or("Item de recuperação não encontrado")?;
         native::restore(item)?;
-        state.index.mark_paths(&[item.original.clone()]);
+        state.index.mark_paths(std::slice::from_ref(&item.original));
         if let Err(e) = write_json(&history_path(&app)?, &history) {
             let _ = app.emit(
                 "history-error",
@@ -986,7 +986,6 @@ fn start_monitor(app: tauri::AppHandle) {
                 }
             }
         }
-        drop(state);
         std::thread::sleep(std::time::Duration::from_secs(60));
     });
 }

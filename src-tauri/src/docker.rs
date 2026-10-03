@@ -430,7 +430,7 @@ pub fn clean(
             break;
         }
         let latest = snapshot(&cli, old.binary.clone())?;
-        if let Err(e) = validate(old, &latest, &[item.id.clone()], &phrase) {
+        if let Err(e) = validate(old, &latest, std::slice::from_ref(&item.id), &phrase) {
             record.skipped.push(e);
             continue;
         }
