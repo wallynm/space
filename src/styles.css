@@ -1,3 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --color-forest: #153e35;
+  --color-mint: #bfe6a9;
+  --color-ink: #233b33;
+  --color-muted: #76837b;
+  --color-line: #e0e4da;
+  --color-paper: #f5f5ee;
+  --color-white: #fdfdf9;
+}
+
 :root {
   font-family: "IBM Plex Sans", sans-serif;
   color: #22362f;
