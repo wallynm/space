@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:native": "cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "tsc -b",
+    "lint": "biome lint src",
+    "format": "biome format --write src",
     "build:mac": "tauri build --bundles app && node scripts/package-macos.mjs",
     "package:mac": "node scripts/package-macos.mjs",
     "release:mac": "node scripts/release-macos.mjs",
@@ -30,6 +32,7 @@
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@playwright/test": "latest",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2",
