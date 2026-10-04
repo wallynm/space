@@ -1,6 +1,6 @@
 [package]
 name = "folga"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2021"
 description = "Espaço para respirar. Análise e limpeza de disco local."
 authors = ["Wallysson Nunes"]
