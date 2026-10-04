@@ -24,7 +24,7 @@ Capturas da interface com dados de demonstração. Os arquivos e números ilustr
 
 **[Baixar o Space para macOS](https://github.com/wallynm/space/releases)** · [Todos os recursos](#interface-e-recursos) · [Compilar o aplicativo](#executar-e-empacotar)
 
-Tauri 2 + React + TanStack Router/Query + Vite. Sem Next.js, SSR ou servidor Node no aplicativo instalado. As operações no sistema e os processos auxiliares são implementados em Rust.
+Tauri 2 + React + Tailwind CSS + TanStack Router/Query + Vite. Sem Next.js, SSR ou servidor Node no aplicativo instalado. As operações no sistema e os processos auxiliares são implementados em Rust.
 
 Repositório: [wallynm/space](https://github.com/wallynm/space). Projeto na raiz do checkout; instale as dependências e execute os comandos abaixo a partir dela.
 
