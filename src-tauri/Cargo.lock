@@ -1086,7 +1086,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "folga"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "blake3",
  "dirs 6.0.0",
