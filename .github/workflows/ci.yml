@@ -30,12 +30,16 @@ jobs:
         run: node scripts/github-release.mjs prepare
       - name: Test frontend and release guards
         run: |
+          pnpm lint
           pnpm test
           pnpm test:release
       - name: Build frontend
         run: pnpm build
       - name: Test Rust
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+        run: |
+          rustup component add clippy
+          cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+          cargo test --locked --manifest-path src-tauri/Cargo.toml
       - name: Install test browser
         run: pnpm exec playwright install chromium
       - name: Verify production UI with simulated IPC
