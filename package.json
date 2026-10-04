@@ -31,11 +31,13 @@
   },
   "devDependencies": {
     "@playwright/test": "latest",
+    "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "latest",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9",
     "vite": "^8",
     "vitest": "^4"
