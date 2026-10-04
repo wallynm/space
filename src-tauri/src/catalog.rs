@@ -518,13 +518,24 @@ pub fn children(report: &CatalogReport, path: &str) -> Result<Vec<Node>, String>
     if !report.nodes.get(path).is_some_and(|n| n.directory) {
         return Err("Pasta fora da análise atual".into());
     }
-    let mut nodes: Vec<_> = report
-        .nodes
-        .values()
-        .filter(|n| Path::new(&n.path).parent() == Some(Path::new(path)))
-        .cloned()
-        .collect();
-    nodes.sort_by_key(|n| std::cmp::Reverse(n.bytes));
+    let mut nodes: Vec<_> = if let Some(inv) = report.inventory.get(path) {
+        let parent = Path::new(path);
+        inv.names
+            .iter()
+            .filter_map(|name| {
+                let child_key = parent.join(name).to_string_lossy().to_string();
+                report.nodes.get(&child_key).cloned()
+            })
+            .collect()
+    } else {
+        report
+            .nodes
+            .values()
+            .filter(|n| Path::new(&n.path).parent() == Some(Path::new(path)))
+            .cloned()
+            .collect()
+    };
+    nodes.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.name.cmp(&b.name)));
     Ok(nodes)
 }
 
@@ -1008,6 +1019,21 @@ mod tests {
             validate_selection(&r, &["forged".into()], false, &AtomicBool::new(false)).is_err()
         );
         assert!(children(&r, "/etc").is_err());
+    }
+    #[test]
+    fn children_uses_inventory_and_falls_back_when_missing() {
+        let (_d, mut report) = fixture();
+        let root = report.root.clone();
+        assert!(report.inventory.contains_key(&root));
+        let with_inv = children(&report, &root).unwrap();
+        assert_eq!(with_inv.len(), 3);
+        report.inventory.remove(&root);
+        let fallback = children(&report, &root).unwrap();
+        assert_eq!(fallback.len(), 3);
+        assert_eq!(
+            with_inv.iter().map(|n| &n.path).collect::<Vec<_>>(),
+            fallback.iter().map(|n| &n.path).collect::<Vec<_>>()
+        );
     }
     #[test]
     fn cleanup_keeps_remaining_catalog_and_persists_removal() {
